@@ -1,10 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -47,25 +49,29 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	defer file.Close()
 	mediaType := header.Header.Get("Content-Type")
 
-	rawFile, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to read file", err)
-		return
-	}
-
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "User is not the video owner", err)
 		return
 	}
 
-	dataURL := fmt.Sprintf(
-		"data:%s;base64,%s",
-		mediaType,
-		base64.StdEncoding.EncodeToString(rawFile),
-	)
+	strs := strings.Split(mediaType, "/")
+	fileExtension := strs[1]
 
-	video.ThumbnailURL = &dataURL
+	filename := videoID.String() + "." + fileExtension
+	emptyimagefile, err := os.Create(filepath.Join(cfg.assetsRoot, filename))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create new image file", err)
+		return
+	}
+
+	if _, err := io.Copy(emptyimagefile, file); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't copy the old image file to the new image file", err)
+		return
+	}
+
+	thumbnailURL := fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, filename)
+	video.ThumbnailURL = &thumbnailURL
 
 	if err := cfg.db.UpdateVideo(video); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video thumbnail url", err)
