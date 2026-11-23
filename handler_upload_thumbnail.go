@@ -59,7 +59,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	types := strings.Split(mediaType, "/")
 	fileExtension := types[1]
 
-	if strings.Compare(fileExtension, "png") != 0 || strings.Compare(fileExtension, "jpeg") != 0 {
+	if (strings.Compare(fileExtension, "png") == 0 || strings.Compare(fileExtension, "jpeg") == 0) == false {
 		respondWithError(w, http.StatusBadRequest, "File is not a png or jpeg", nil)
 		return
 	}
