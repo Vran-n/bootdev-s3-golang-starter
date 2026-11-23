@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -47,16 +48,27 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	defer file.Close()
-	mediaType := header.Header.Get("Content-Type")
+	ctvalue := header.Header.Get("Content-Type")
+
+	mediaType, _, err := mime.ParseMediaType(ctvalue)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Invalid content type params", err)
+		return
+	}
+
+	types := strings.Split(mediaType, "/")
+	fileExtension := types[1]
+
+	if strings.Compare(fileExtension, "png") != 0 || strings.Compare(fileExtension, "jpeg") != 0 {
+		respondWithError(w, http.StatusBadRequest, "File is not a png or jpeg", nil)
+		return
+	}
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "User is not the video owner", err)
 		return
 	}
-
-	strs := strings.Split(mediaType, "/")
-	fileExtension := strs[1]
 
 	filename := videoID.String() + "." + fileExtension
 	emptyimagefile, err := os.Create(filepath.Join(cfg.assetsRoot, filename))
