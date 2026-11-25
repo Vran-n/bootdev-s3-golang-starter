@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -16,8 +17,8 @@ import (
 )
 
 func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
 	const maxMemory = 1 << 30
+	defer r.Body.Close()
 	r.Body = http.MaxBytesReader(w, r.Body, maxMemory)
 
 	videoIDString := r.PathValue("videoID")
@@ -49,7 +50,11 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	videofile, header, err := r.FormFile("video")
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
+		if mb_err, ismaxbytes := errors.AsType[*http.MaxBytesError](err); ismaxbytes {
+			respondWithError(w, http.StatusRequestEntityTooLarge, "Video is larger than 1 GB", mb_err)
+		} else {
+			respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
+		}
 		return
 	}
 	defer videofile.Close()
