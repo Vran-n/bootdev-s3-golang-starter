@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/videometadata"
 	"github.com/google/uuid"
 )
 
@@ -73,18 +74,33 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	newvideofile, err := os.CreateTemp("", "tubely-upload.mp4")
+	newvideofile, err := os.CreateTemp("", "tubely-upload")
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Can't create temp video", err)
 		return
 	}
 
-	defer os.Remove(fmt.Sprintf("%s%s", os.TempDir(), "/tubely-upload.mp4"))
+	defer os.Remove(newvideofile.Name())
 	defer newvideofile.Close()
 
 	if _, err := io.Copy(newvideofile, videofile); err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't copy the old image file to the new image file", err)
 		return
+	}
+
+	aspectRatio, err := videometadata.GetVideoAspectRatio(newvideofile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get the video's aspect ratio", err)
+		return
+	}
+
+	var viewingType string
+	if strings.Compare("16:9", aspectRatio) == 0 {
+		viewingType = "landscape"
+	} else if strings.Compare("9:16", aspectRatio) == 0 {
+		viewingType = "portrait"
+	} else if strings.Compare("OTHER", aspectRatio) == 0 {
+		viewingType = "other"
 	}
 
 	if _, err := newvideofile.Seek(0, io.SeekStart); err != nil {
@@ -94,7 +110,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	key := make([]byte, 32)
 	rand.Read(key)
-	filename := base64.RawURLEncoding.EncodeToString(key) + "." + fileExtension
+	filename := viewingType + "/" + base64.RawURLEncoding.EncodeToString(key) + "." + fileExtension
 
 	bucketname := "tubely-12026"
 
