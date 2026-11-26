@@ -2,18 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/s3helper"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -32,6 +28,7 @@ type apiConfig struct {
 	port             string
 }
 
+/*
 func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
 	if video.VideoURL == nil {
 		return database.Video{}, errors.New("VideoURL doesnt exist")
@@ -51,7 +48,7 @@ func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video
 
 	video.VideoURL = &newURL
 	return video, nil
-}
+}*/
 
 type thumbnail struct {
 	data      []byte

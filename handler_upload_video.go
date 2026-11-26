@@ -139,7 +139,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	vidurl := fmt.Sprintf("%s,%s", cfg.s3Bucket, filename)
+	vidurl := fmt.Sprintf("https://%s/%s", cfg.s3CfDistribution, filename)
 	video.VideoURL = &vidurl
 
 	if err := cfg.db.UpdateVideo(video); err != nil {
