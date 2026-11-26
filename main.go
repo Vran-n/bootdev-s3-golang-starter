@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/s3helper"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -26,6 +30,27 @@ type apiConfig struct {
 	s3Region         string
 	s3CfDistribution string
 	port             string
+}
+
+func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
+	if video.VideoURL == nil {
+		return database.Video{}, errors.New("VideoURL doesnt exist")
+	}
+
+	strs := strings.Split(*video.VideoURL, ",")
+	if len(strs) != 2 {
+		return database.Video{}, errors.New("Bucket/Key not found in the database video url")
+	}
+
+	bucket := strs[0]
+	key := strs[1]
+	newURL, err := s3helper.GeneratePresignedURL(cfg.s3Client, bucket, key, 5*time.Minute)
+	if err != nil {
+		return database.Video{}, fmt.Errorf("Can't get presigned url: %w", err)
+	}
+
+	video.VideoURL = &newURL
+	return video, nil
 }
 
 type thumbnail struct {

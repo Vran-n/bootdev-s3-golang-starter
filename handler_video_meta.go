@@ -82,6 +82,18 @@ func (cfg *apiConfig) handlerVideoMetaDelete(w http.ResponseWriter, r *http.Requ
 }
 
 func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
+		return
+	}
+
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -95,7 +107,22 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, video)
+	if video.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "User doesn't own the video", err)
+		return
+	}
+
+	if video.VideoURL != nil {
+		newVideo, err := cfg.dbVideoToSignedVideo(video)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Can't get video with a presigned url", err)
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, newVideo)
+	} else {
+		respondWithJSON(w, http.StatusOK, video)
+	}
 }
 
 func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
@@ -116,5 +143,26 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, videos)
+	areVideoURLsNil := false
+	newVideos := []database.Video{}
+	for _, video := range videos {
+		if video.VideoURL == nil {
+			areVideoURLsNil = true
+			break
+		}
+
+		newVideo, err := cfg.dbVideoToSignedVideo(video)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Can't get video with a presigned url", err)
+			return
+		}
+
+		newVideos = append(newVideos, newVideo)
+	}
+
+	if areVideoURLsNil == false {
+		respondWithJSON(w, http.StatusOK, newVideos)
+	} else {
+		respondWithJSON(w, http.StatusOK, videos)
+	}
 }
