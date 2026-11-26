@@ -13,7 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/videometadata"
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/vidhelper"
 	"github.com/google/uuid"
 )
 
@@ -88,7 +88,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	aspectRatio, err := videometadata.GetVideoAspectRatio(newvideofile.Name())
+	aspectRatio, err := vidhelper.GetVideoAspectRatio(newvideofile.Name())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't get the video's aspect ratio", err)
 		return
@@ -108,18 +108,30 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	modifiedFileName, err := vidhelper.ProcessVideoForFastStart(newvideofile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't move the moov atom to the start of the file", err)
+		return
+	}
+
+	modifiedFile, err := os.Open(modifiedFileName)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't open the modified moov file", err)
+		return
+	}
+	defer os.Remove(modifiedFile.Name())
+	defer modifiedFile.Close()
+
 	key := make([]byte, 32)
 	rand.Read(key)
 	filename := viewingType + "/" + base64.RawURLEncoding.EncodeToString(key) + "." + fileExtension
 
-	bucketname := "tubely-12026"
-
 	if _, err := cfg.s3Client.PutObject(
 		r.Context(),
 		&s3.PutObjectInput{
-			Bucket:      &bucketname,
+			Bucket:      &cfg.s3Bucket,
 			Key:         &filename,
-			Body:        newvideofile,
+			Body:        modifiedFile,
 			ContentType: &mediatype,
 		},
 	); err != nil {
@@ -127,7 +139,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	vidurl := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketname, cfg.s3Region, filename)
+	vidurl := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, filename)
 	video.VideoURL = &vidurl
 
 	if err := cfg.db.UpdateVideo(video); err != nil {
